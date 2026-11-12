@@ -11,3 +11,6 @@ geometry/
 summary.json
 __pycache__/
 *.pyc
+# third-party tools and models downloaded by setup_tools.py (large; reproducible)
+tools/
+*.bak_*/

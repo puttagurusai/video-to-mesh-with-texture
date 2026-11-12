@@ -1,0 +1,6 @@
+# Only for the OPTIONAL parts (off by default):
+#   networkx   edge-graph stage 9 (`--edges`)
+#   pycolmap   COLMAP backend (`backend: colmap` in pipeline.yaml)
+# Install with:  python -m pip install -r requirements-optional.txt   (or: python setup_tools.py --with-optional)
+networkx==3.6.1
+pycolmap==4.2.1

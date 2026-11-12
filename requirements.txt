@@ -1,0 +1,37 @@
+# Python packages for the video -> 3D pipeline. One interpreter runs everything (the pipeline and Depth Anything 3).
+#
+#   python -m pip install -r requirements.txt        (or let  python setup_tools.py  do it together with the downloads)
+#
+# Versions are the ones this project was TESTED with (Windows 11, Python 3.13.7, RTX 500 Ada, driver with CUDA 12 support).
+# They have NOT been verified on a clean machine; other Python versions may not have these exact wheels.
+#
+# PyTorch comes from the PyTorch index below (CUDA 11.8 build). Needs an NVIDIA GPU + driver. This build has kernels up to
+# compute capability 9.0, so RTX 50-series (sm_120) GPUs are NOT supported by it; for those pick a newer torch build from
+# https://pytorch.org/get-started/locally/ (untested here) and install it before the rest.
+--extra-index-url https://download.pytorch.org/whl/cu118
+torch==2.7.1+cu118
+torchvision==0.22.1+cu118
+
+# pipeline
+numpy==2.3.5
+scipy==1.18.0
+opencv-python==4.13.0.92
+pillow==12.1.1
+scikit-image==0.26.0
+trimesh==4.12.2
+matplotlib==3.10.8
+PyYAML==6.0.3
+tqdm==4.69.0
+
+# Depth Anything 3 runtime (its own requirements.txt also lists xformers, open3d, e3nn, gsplat: NOT needed for inference and
+# without easy Windows wheels, so they are left out on purpose; DA3's numpy<2 pin is ignored on purpose)
+transformers==4.46.1
+huggingface_hub==0.36.2
+safetensors==0.8.0
+einops==0.8.2
+imageio==2.37.4
+addict==2.4.0
+omegaconf==2.4.0
+moviepy==1.0.3
+evo==1.38.1
+plyfile==1.1.5

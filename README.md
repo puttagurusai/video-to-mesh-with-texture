@@ -58,6 +58,10 @@ Measured results (each on the stated footage; a 4 GB RTX 500 Ada laptop GPU):
 ```
 run.bat                  drag a video here (window stays open, live steps, new log per run)
 run_pipeline.py          the command-line entry point (stages, adaptive retries, summary, viewer)
+setup_tools.bat/.py      first-time setup: pip packages + downloads into tools\ (see Requirements)
+requirements.txt         pinned Python packages (requirements-optional.txt: edge route / COLMAP backend)
+scripts/                 the Depth Anything 3 runner scripts (da3_reconstruct.py and the 4 it imports)
+tools/                   downloaded by setup_tools (DA3 source and weights); not in git
 check_env.py             6-second readiness check (also: run_pipeline.py --check)
 pipeline.yaml            every tunable setting, in sections (keyframes, da3, refine, mesh, ...)
 CAPTURE_GUIDE.md         how to film a scene so the result is good
@@ -84,13 +88,31 @@ That edge route was our first plan for a "surface from edges" scene; the point c
 
 ## Requirements
 
-Windows, an NVIDIA GPU, Python 3.13 with torch (CUDA), OpenCV, SciPy, scikit-image, trimesh, Pillow, PyYAML. DA3-BASE (Apache-2.0) is the only
-model; it comes from an existing install (`scripts/da3_reconstruct.py`, `tools/da3_src`, `tools/da3_models/DA3-BASE`, optionally `tools/venv_da3`):
-set `da3.root` in `pipeline.yaml` or the `DA3_ROOT` environment variable (`DA3_PYTHON` to pick the interpreter). `python run_pipeline.py --check`
-reports GPU, free VRAM, missing libraries, the DA3 files and disk. Before the heavy steps the run estimates the disk this video needs and stops
-early with a clear message if it will not fit. The torch build here is CUDA 11.8 with kernels up to compute capability 9.0: **RTX 50-series GPUs
-are not expected to work**. Sharing the code or weights with other people needs the owner's and legal review (DA3-BASE is Apache-2.0; check every
-other file you ship).
+Windows, an NVIDIA GPU with its driver, the Visual C++ runtime, and Python 3.13 (the version everything was tested with).
+
+**First-time setup on a new computer** (one command; it lists what it will download and asks first):
+
+```
+setup_tools.bat            (or: python setup_tools.py)
+```
+
+It installs the Python packages from `requirements.txt` (PyTorch CUDA 11.8 build etc., pinned to the tested versions) and downloads into
+`tools\`: the Depth Anything 3 source at a pinned commit (`tools\da3_src`, Apache-2.0) and the DA3-BASE weights (`tools\da3_models\DA3-BASE`,
+Apache-2.0, 517 MB, SHA-256 verified), plus the small Depth-Anything-V2 metric model (95 MB, into the Hugging Face cache) that the DA3 runner
+loads offline. The DA3 runner scripts themselves are in this repo (`scripts\`). Options: `--check` (status only), `--dry-run`, `--yes`,
+`--with-optional` (networkx + pycolmap + Depth-Anything-V2-Small for the edge route / COLMAP backend), `--only` / `--skip`, and
+`--from-existing "D:\old\project"` to reuse an existing DA3 source and weights by hard links (no download, no extra disk). Then:
+
+```
+python run_pipeline.py --check      (READY or a list of what is missing)
+```
+
+The check reports GPU and free VRAM, missing libraries, the DA3 files, the metric model and disk. `da3.root` in `pipeline.yaml` (default `.` =
+this project) and the `DA3_ROOT` environment variable point at another folder with the same layout; `DA3_PYTHON` picks another interpreter for DA3.
+Before the heavy steps a run estimates the disk this video needs and stops early with a clear message if it will not fit.
+The torch build is CUDA 11.8 with kernels up to compute capability 9.0: **RTX 50-series GPUs are not expected to work** with it. A full install
+on a clean computer (PyTorch wheels, the 517 MB download) has not been run yet. Sharing the code or weights with other people needs the owner's
+and legal review (DA3-BASE and Depth-Anything-V2-Small are Apache-2.0; the metric model's page states no licence, so check its model card).
 
 ## Know the limits
 

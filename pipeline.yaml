@@ -33,7 +33,7 @@ mesh:                   # stage 12: one textured surface from the fused cloud
 backend: da3            # da3 = Depth Anything 3 poses/intrinsics/depth (fast, GPU); colmap = pycolmap fallback (CPU, flaky on pans)
 
 da3:
-  root: C:/me/proj/3d scene reconstruction 2   # existing install: tools/venv_da3, tools/da3_models, scripts/da3_reconstruct.py
+  root: .   # folder with scripts/da3_reconstruct.py, tools/da3_src, tools/da3_models/DA3-BASE ("." = this project; filled by setup_tools.py)
   process_res: 504
   chunk_max: 24
   overlap: 5

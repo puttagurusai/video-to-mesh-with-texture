@@ -76,29 +76,48 @@ def check(config_path: str = "pipeline.yaml") -> int:
     print("Depth Anything 3:")
     try:
         from video_to_3d.config import load_config
+        from video_to_3d.da3_paths import RUNNER_MODULES, da3_files, da3_python, da3_root
         cfg = load_config(config_path)
-        root = Path(os.environ.get("DA3_ROOT") or cfg.da3.root)
+        root = da3_root(cfg)
     except Exception as e:  # noqa: BLE001
         fail(f"cannot read {config_path}: {e}")
         root = None
     if root is not None:
-        venv_py = root / "tools" / "venv_da3" / "Scripts" / "python.exe"
-        py = venv_py if venv_py.exists() else Path(os.environ.get("DA3_PYTHON") or sys.executable)
-        for label, p in (("runner script", root / "scripts" / "da3_reconstruct.py"),
-                         ("DA3 source", root / "tools" / "da3_src"),
-                         ("DA3-BASE weights", root / "tools" / "da3_models" / "DA3-BASE")):
-            ok(f"{label}: {p}") if p.exists() else fail(f"missing {label}: {p}")
+        py = da3_python(root)
+        missing_files = False
+        for label, p in da3_files(root):
+            if p.exists():
+                ok(f"{label}: {p}")
+            else:
+                fail(f"missing {label}: {p}")
+                missing_files = True
+        # the runner loads this model offline from the Hugging Face cache, even in poses-only mode
+        try:
+            from setup_tools import DAV2, hf_cache_has
+            repo = DAV2["dav2-metric"]["repo"]
+            if hf_cache_has(repo):
+                ok(f"metric-depth model in the Hugging Face cache: {repo}")
+            else:
+                fail(f"metric-depth model missing from the Hugging Face cache: {repo}")
+                missing_files = True
+        except Exception as e:  # noqa: BLE001
+            note(f"could not check the Hugging Face cache: {e}")
+        if missing_files:
+            print("         -> run:  python setup_tools.py   (downloads what is missing)")
         ok(f"interpreter for DA3: {py}") if py.exists() else fail(f"DA3 interpreter not found: {py}")
         if py.exists():
             # modules the DA3 runner script imports; checked in the interpreter that will actually run it
-            mods = ["numpy", "torch", "cv2", "scipy", "skimage", "trimesh", "PIL", "transformers", "omegaconf", "addict", "einops"]
+            mods = RUNNER_MODULES
             code = ("import importlib.util as u,sys;"
                     f"print(','.join(m for m in {mods!r} if u.find_spec(m) is None))")
             try:
                 r = subprocess.run([str(py), "-I", "-c", code], capture_output=True, text=True, timeout=60)
                 missing = [m for m in r.stdout.strip().split(",") if m]
-                (fail(f"DA3 interpreter lacks: {', '.join(missing)}") if missing
-                 else ok("DA3 interpreter has the runner's libraries"))
+                if missing:
+                    fail(f"DA3 interpreter lacks: {', '.join(missing)}")
+                    print("         -> run:  python -m pip install -r requirements.txt   (or: python setup_tools.py)")
+                else:
+                    ok("DA3 interpreter has the runner's libraries")
             except Exception as e:  # noqa: BLE001
                 note(f"could not inspect the DA3 interpreter: {e}")
 
