@@ -1,0 +1,152 @@
+# Tunable parameters for the video -> 3D edge pipeline (V1: stages 1-6)
+video: video/hotel_room.mp4
+workdir: .            # output tree (keyframes/, colmap/, depth/, edges/, tracking/, viz/) is created here
+
+keyframes:
+  selection: overlap      # the footage decides how many keyframes: new one when shared content drops below overlap_target
+  overlap_target: 0.8
+  max_shift_frac: 0.10
+  max_gap_frames: 30
+  min_gap_frames: 2
+  adaptive_targets: [0.8, 0.9, 0.95]   # --adaptive tries these overlap targets in order until the capture verdict is GOOD
+  min_keyframes: 12       # safety limits only
+  max_keyframes: 300
+  max_side: 1600          # downscale long side to this many px
+  target_min: 20
+  target_max: 40
+  min_parallax_px: 25.0   # median LK flow vs last keyframe, measured at max_side scale
+  sharpness_window: 7     # pick sharpest frame within this many frames of a candidate
+  min_sharpness_ratio: 0.5  # reject frames below this fraction of the video's median sharpness
+
+edges_enabled: false    # edge stages 4-10 are off by default (video -> poses/depth -> cloud -> mesh -> texture)
+
+mesh:                   # stage 12: one textured surface from the fused cloud
+  max_dim: 320
+  min_views: 2
+  tex_side: 960
+  silhouette_thr: 0.004   # drop depth pixels at steep depth gradients (blurred object boundaries); 0.002 loses coverage
+  min_frame_consistency: 0.5
+  tex_min_cos: 0.2
+  tex_fallback_cos: 0.03
+  drop_unseen_faces: true
+
+backend: da3            # da3 = Depth Anything 3 poses/intrinsics/depth (fast, GPU); colmap = pycolmap fallback (CPU, flaky on pans)
+
+da3:
+  root: C:/me/proj/3d scene reconstruction 2   # existing install: tools/venv_da3, tools/da3_models, scripts/da3_reconstruct.py
+  process_res: 504
+  chunk_max: 24
+  overlap: 5
+
+refine:                 # pose/focal refinement of DA3 against LK-tracked corners (held-out scored), runs inside stage 2
+  enabled: true
+  offsets: [1, 2]
+  corners: 600
+  min_dist_px: 12
+  huber_px: 2.0
+  max_nfev: 60
+
+sfm:                    # only used when backend: colmap
+  matcher_overlap: 10
+  camera_model: SIMPLE_RADIAL    # SIMPLE_PINHOLE failed to initialise on this footage (real lens distortion)
+  random_seed: 0
+  refine_distortion: true
+  max_image_size: 1600    # 1024px/4096 features was ~3x faster but broke geometry (depth alignment failed)
+  max_features: 8192
+  min_registered_frac: 0.8
+  max_reproj_error_px: 1.5
+
+depth:
+  model: depth-anything/Depth-Anything-V2-Small-hf
+  input_size: 518
+  ransac_iters: 500
+  ransac_inlier_frac_tol: 0.05   # inlier if inverse-depth residual < 5% of its value
+  min_inliers: 20
+  consistency_rel_tol: 0.05
+
+edges:
+  hysteresis_high: 0.5    # on background-normalised probability
+  hysteresis_low: 0.2
+  simplify_eps_px: 1.0
+  min_length_px: 10
+  classify_offsets: [6, 16]   # px each side of an edge sampled for provisional type tagging
+  jump_thresh: 0.04           # slope-compensated relative depth step -> depth_discontinuity
+  kink_thresh: 0.02           # relative depth-slope change -> crease_candidate
+
+lift:
+  side_offset_px: [6, 16]   # [near, far] px each side; depth is DA3 504px upsampled, so ~3 DA3 pixels per 10 px
+  crease_side_tol: 0.05
+  smooth_sigma: 1.0
+  step_px: 4.0
+  min_conf: 0.35
+  rdp_eps_rel: 0.002
+
+geometry:               # stage 7: straight / curved / piecewise classification and persistent provisional edges
+  rel_depth_sigma: 0.02   # assumed depth noise along the viewing ray (relative)
+  lateral_px_sigma: 2.0   # assumed sideways edge noise (px)
+  straight_k: 1.5         # weighted rms of normalised deviation
+  max_dev_factor: 4.0
+  min_len_px: 20.0
+  min_samples: 4
+  min_conf: 0.4
+  corner_deg: 35.0
+  dense_step_px: 6.0
+  single_frame_conf_cap: 0.5
+
+track:                  # stage 8: persistent edge map (high-confidence physical edges only)
+  tracked_kinds: [depth_discontinuity, crease_candidate]
+  long_straight_px: 150.0
+  min_len_px: 40.0
+  min_conf: 0.2
+  visible_depth_rel: 0.15
+  min_visible_samples: 5
+  gate_rms_norm: 3.0
+  fuse_gate_rel: 0.03
+  max_obs_samples: 40
+  verify_min_obs: 3
+  verify_min_conf: 0.6
+
+graph:                  # stage 9: shared vertices, junctions, near-miss extension, closed planar loops
+  min_views: 2          # 2 gave 15 loops vs 0 in the displaced-edge control; 3 gave 11 vs 1 (fewer, all verified-grade)
+  gap_px: 12.0
+  depth_snap_rel: 0.03
+  ext_px: 40.0
+  ext_tol_px: 6.0
+  min_angle_deg: 20.0
+  loop_max_len: 8
+  max_cycles: 200000
+  plane_tol_rel: 0.02
+  min_area_rel: 0.05
+  min_thickness_rel: 0.04   # slivers thinner than the snap radius are double detections of one edge
+  depth_check_shift_rel: 0.10   # control for the depth check: plane moved 10% of depth, must now FAIL
+  support_tol: 0.06
+  support_frac: 0.6
+  control_shift_tol: 2.0
+
+surface:                # stage 10: depth-supported planes + exact loop faces, scored on held-out views
+  stride: 16
+  conf_min: 0.5
+  plane_tol_rel: 0.02
+  normal_deg: 20.0
+  max_planes: 24
+  min_support_frac: 0.012
+  ransac_iters: 1500
+  cell_rel: 0.025
+  min_cells: 15
+  loop_classes: [supported]
+  eval_tol: 0.04          # point-to-plane distance / depth (2x the fit tolerance)
+  eval_shift_rel: 0.10    # control: planes moved 10% of depth must score clearly worse
+  gate_min_agree: 0.80    # evidence gate: a patch must agree with the depth of every frame that sees it...
+  gate_max_contra: 0.10   # ...and rarely float in front of it; failing patches are rejected, not exported
+  gate_min_px: 150
+  eval_stride: 4
+
+match:
+  gate_px: 3.0
+  max_mean_dist_px: 4.0
+  max_angle_deg: 15.0
+  max_depth_rel_err: 0.08
+  min_samples: 5
+  min_coverage: 0.3
+  min_support: 0.5        # stage 8
+  strong_min_length_px: 40.0
